@@ -24,7 +24,7 @@ func main() {
 	if err != nil {
 		fmt.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
-	}else {
+	} else {
 		fmt.Println("Connection accepted successfully!")
 	}
 	handleConnection(conn)
@@ -32,15 +32,19 @@ func main() {
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
-	buf:=make([]byte, 1024)
-	len, err := conn.Read(buf)
-	if err != nil {
-		fmt.Println("Error reading:", err.Error())
-		return
+	buf := make([]byte, 1024)
+	for {
+		len, err := conn.Read(buf)
+		if err != nil {
+			fmt.Println("Error reading:", err.Error())
+			return
+		}
+		str := string(buf[:len])
+		if strings.Contains(str, "PING") {
+			conn.Write([]byte("+PONG\r\n"))
+		} else {
+			conn.Write([]byte("-ERR unknown command\r\n"))
+		}
 	}
-	str := string(buf[:len])
-	if strings.Contains(str, "PING") {
-		conn.Write([]byte("+PONG\r\n"))
-	}
-	
+
 }
