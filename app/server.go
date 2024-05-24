@@ -2,26 +2,30 @@ package main
 
 import (
 	"fmt"
-	// Uncomment this block to pass the first stage
 	"net"
 	"os"
 	"strings"
 )
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
+	// // *2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n
+	// a,_:=ParseQuery([]string{
+	// 	"*1",
+	// 	"$4",
+	// 	"PING",
+	// })
+	// a.Print("")
+	// fmt.Println("->"+Execute(&a))
+	// return
 
-	// Uncomment this block to pass the first stage
-	//
 	l, err := net.Listen("tcp", "localhost:6379")
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
+	fmt.Println("Listening on port 6379")
 	for {
 		conn, err := l.Accept()
-		defer l.Close()
 		if err != nil {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
@@ -29,6 +33,7 @@ func main() {
 			fmt.Println("Connection accepted successfully!")
 		}
 		go handleConnection(conn)
+		// l.Close()
 	}
 }
 
@@ -42,11 +47,9 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 		str := string(buf[:len])
-		if strings.Contains(str, "PING") {
-			conn.Write([]byte("+PONG\r\n"))
-		} else {
-			conn.Write([]byte("-ERR unknown command\r\n"))
-		}
+		data, _:=ParseQuery(strings.Split(str,"\r\n"))
+		res := Execute(&data)
+		conn.Write([]byte(res))
 	}
 
 }
