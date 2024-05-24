@@ -7,16 +7,29 @@ import (
 	"strings"
 )
 
+var TEST = 0
+
 func main() {
-	// // *2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n
-	// a,_:=ParseQuery([]string{
-	// 	"*1",
-	// 	"$4",
-	// 	"PING",
-	// })
-	// a.Print("")
-	// fmt.Println("->"+Execute(&a))
-	// return
+	if TEST != 0 {
+		// // *2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n
+		testQuery([]string{
+			"*3",
+			"$3",
+			"SET",
+			"$3",
+			"FOO",
+			"$3",
+			"BAR",
+		})
+		testQuery([]string{
+			"*2",
+			"$3",
+			"GET",
+			"$3",
+			"FOO",
+		})
+		return
+	}
 
 	l, err := net.Listen("tcp", "localhost:6379")
 	if err != nil {
@@ -47,9 +60,16 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 		str := string(buf[:len])
-		data, _:=ParseQuery(strings.Split(str,"\r\n"))
+		data, _ := ParseQuery(strings.Split(str, "\r\n"))
 		res := Execute(&data)
 		conn.Write([]byte(res))
 	}
 
+}
+
+func testQuery(comms []string) {
+	fmt.Println("testing:", comms)
+	a, _ := ParseQuery(comms)
+	a.Print("")
+	fmt.Println("->" + Execute(&a))
 }
