@@ -2,24 +2,25 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strings"
+	"time"
 )
 
-var storage = make(map[string]string)
-const NULL_BULK_STRING = "$-1\r\n"
+var storage = make(map[string]Value)
 
 func Execute(data *Data) string {
 	// this data is an array, as per the protocol
 	for i := 0; i < len(data.children); i++ {
-		child := data.children[i].(Data)
+		child := data.children[i]
 		switch child.kind {
 		case '$':
 			{
-				operator := child.children[0].(string)
+				operator := child.content
 				switch strings.ToUpper(operator) {
 				case "ECHO":
 					{
-						str := data.children[i+1].(Data).children[0].(string)
+						str := data.children[i+1].content
 						return encodeBlukString(str)
 					}
 				case "PING":
@@ -28,19 +29,28 @@ func Execute(data *Data) string {
 					}
 				case "SET":
 					{
-						key := data.children[i+1].(Data).children[0].(string)
-						value := data.children[i+2].(Data).children[0].(string)
-						storage[key] = value
+						key := data.children[i+1].content
+						value := data.children[i+2].content
+						dur := getDuration(data.children[i+3:])
+						expires := time.Now().Add(dur)
+						fmt.Println("set at ",time.Now().UnixMicro())
+						storage[key] = Value{
+							value,
+							expires,
+						}
 						return encodeSimpleString("OK")
 					}
 				case "GET":
 					{
-						key := data.children[i+1].(Data).children[0].(string)
+						key := data.children[i+1].content
 						value, exists := storage[key]
 						if !exists {
 							return NULL_BULK_STRING
 						}
-						return encodeBlukString(value)
+						if value.expired() {
+							return NULL_BULK_STRING
+						}
+						return encodeBlukString(value.value)
 					}
 				}
 			}
@@ -55,5 +65,18 @@ func encodeBlukString(s string) string {
 }
 
 func encodeSimpleString(s string) string {
-	return fmt.Sprintf("+%s\r\n",s)
+	return fmt.Sprintf("+%s\r\n", s)
+}
+
+func getDuration(data []Data) time.Duration {
+	if len(data) < 2 {
+		return time.Duration(math.MaxInt64)
+	}
+	if data[0].kind == '$' && strings.EqualFold(data[0].content, "PX") {
+		num, valid := data[1].asInt()
+		if valid {
+			return time.Duration(num) * time.Millisecond
+		}
+	}
+	return time.Duration(math.MaxInt64)
 }

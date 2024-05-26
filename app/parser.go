@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	// "fmt"
 	"strconv"
 	// "strings"
 )
@@ -15,12 +15,14 @@ func parseHeader(header string) (byte, int) {
 
 func ParseQuery(query []string) (Data, int) {
 	kind, size := parseHeader(query[0])
-	fmt.Println(query)
+	// fmt.Println(query)
 	switch kind {
 	case '*':
 		return parseArray(query[1:], size)
 	case '$':
 		return parseBulkString(query, size)
+	case ':':
+		return parseInteger(query, size)
 	}
 
 	return Data{}, 0
@@ -28,7 +30,7 @@ func ParseQuery(query []string) (Data, int) {
 
 func parseArray(query []string, size int) (Data, int) {
 	ind := 0
-	data := Data{kind: '*', size: size, children: make([]interface{}, size)}
+	data := Data{kind: '*', size: size, children: make([]Data, size)}
 	for i := 0; i < size; i++ {
 		elem, off := ParseQuery(query[ind:])
 		// fmt.Println(elem)
@@ -39,7 +41,13 @@ func parseArray(query []string, size int) (Data, int) {
 }
 
 func parseBulkString(query []string, size int) (Data, int) {
-	data := Data{kind: '$', size: size, children: make([]interface{}, 1)}
-	data.children[0] = query[1]
+	data := Data{kind: '$', size: size, children: make([]Data, 1)}
+	data.content = query[1]
+	return data, 2
+}
+
+func parseInteger(query []string, size int) (Data, int) {
+	data := Data{kind: ':', size: size, children: make([]Data, 1)}
+	data.content = query[1]
 	return data, 2
 }

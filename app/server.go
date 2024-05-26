@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 )
 
 var TEST = 0
@@ -12,22 +13,31 @@ var TEST = 0
 func main() {
 	if TEST != 0 {
 		// // *2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n
+		fmt.Println(time.Now().UnixNano())
 		testQuery([]string{
-			"*3",
+			"*5",
 			"$3",
 			"SET",
-			"$3",
-			"FOO",
+			"$9",
+			"blueberry",
 			"$3",
 			"BAR",
+			"$2",
+			"px",
+			":2",
+			"100",
 		})
+		fmt.Println(time.Now().UnixNano())
+		time.Sleep(time.Duration(100) * time.Millisecond)
 		testQuery([]string{
 			"*2",
 			"$3",
 			"GET",
 			"$3",
-			"FOO",
+			"blueberry",
 		})
+		fmt.Println(time.Now().UnixNano())
+
 		return
 	}
 
@@ -68,8 +78,8 @@ func handleConnection(conn net.Conn) {
 }
 
 func testQuery(comms []string) {
-	fmt.Println("testing:", comms)
+	// fmt.Println("testing:", comms)
 	a, _ := ParseQuery(comms)
-	a.Print("")
+	// a.Print("")
 	fmt.Println("->" + Execute(&a))
 }
