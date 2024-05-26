@@ -68,14 +68,14 @@ func connectToMaster(ctx *Context) {
 		return
 	}
 	defer conn.Close()
-	conn.Write([]byte(encodeQuery([]string{"PING"})))
+	conn.Write([]byte(encodeQuery("PING")))
 	readConn(conn)
-	conn.Write([]byte(encodeQuery([]string{"REPLCONF", "listening-port", ctx.info["port"]})))
+	conn.Write([]byte(encodeQuery("REPLCONF", "listening-port", ctx.info["port"])))
 	readConn(conn)
-	conn.Write([]byte(encodeQuery([]string{"REPLCONF", "capa", "psync2"})))
+	conn.Write([]byte(encodeQuery("REPLCONF", "capa", "psync2")))
 	readConn(conn)
-	conn.Write([]byte(encodeQuery([]string{"PSYNC","?","-1"})))
-	
+	conn.Write([]byte(encodeQuery("PSYNC", "?", "-1")))
+
 }
 
 func readConn(conn net.Conn) string {
@@ -113,11 +113,11 @@ func testQuery(comms []string) {
 }
 
 func test() {
-	fmt.Println(encodeQuery([]string{
+	fmt.Println(encodeQuery(
 		"REPLCONF",
 		"listening-port",
 		"7788",
-	}))
+	))
 
 	if TEST != 0 {
 		// // *2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n

@@ -25,7 +25,7 @@ func Execute(data *Data, ctx *Context) string {
 					}
 				case "PING":
 					{
-						return "+PONG\r\n"
+						return PONG
 					}
 				case "SET":
 					{
@@ -54,6 +54,8 @@ func Execute(data *Data, ctx *Context) string {
 					}
 				case "INFO":
 					return encodeBulkString(replicationData(ctx))
+				case "REPLCONF":
+					return OK
 				}
 			}
 		}
