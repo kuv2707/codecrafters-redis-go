@@ -5,6 +5,7 @@ import "fmt"
 const NULL_BULK_STRING = "$-1\r\n"
 const PONG = "+PONG\r\n"
 const OK = "+OK\r\n"
+const CRLF = "\r\n"
 
 func encodeBulkString(s string) string {
 	l := len(s)

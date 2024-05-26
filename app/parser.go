@@ -13,41 +13,41 @@ func parseHeader(header string) (byte, int) {
 
 }
 
-func ParseQuery(query []string) (Data, int) {
-	kind, size := parseHeader(query[0])
-	// fmt.Println(query)
+func ParseQuery(query []string, read *int) Data {
+	log(*read)
+	kind, size := parseHeader(query[*read])
 	switch kind {
 	case '*':
-		return parseArray(query[1:], size)
+		return parseArray(query, size, read)
 	case '$':
-		return parseBulkString(query, size)
+		return parseBulkString(query, size, read)
 	case ':':
-		return parseInteger(query, size)
+		return parseInteger(query, size, read)
 	}
 
-	return Data{}, 0
+	return Data{}
 }
 
-func parseArray(query []string, size int) (Data, int) {
-	ind := 0
+func parseArray(query []string, size int, read *int) Data {
+	*read += 1
 	data := Data{kind: '*', size: size, children: make([]Data, size)}
 	for i := 0; i < size; i++ {
-		elem, off := ParseQuery(query[ind:])
-		// fmt.Println(elem)
-		ind += off
+		elem := ParseQuery(query, read)
 		data.children[i] = elem
 	}
-	return data, ind
+	return data
 }
 
-func parseBulkString(query []string, size int) (Data, int) {
+func parseBulkString(query []string, size int, read *int) Data {
 	data := Data{kind: '$', size: size, children: make([]Data, 1)}
-	data.content = query[1]
-	return data, 2
+	data.content = query[*read+1]
+	*read += 2
+	return data
 }
 
-func parseInteger(query []string, size int) (Data, int) {
+func parseInteger(query []string, size int, read *int) Data {
 	data := Data{kind: ':', size: size, children: make([]Data, 1)}
 	data.content = query[1]
-	return data, 2
+	*read += 2
+	return data
 }
