@@ -11,7 +11,9 @@ import (
 
 var storage = make(map[string]Value)
 
-func Execute(data *Data, conn net.Conn, ctx *Context) []string {
+var slaves = make(map[*net.Conn]bool)
+
+func Execute(data *Data, conn net.Conn, ctx *Context) ([]string, bool) {
 	// this data is an array, as per the protocol
 	for i := 0; i < len(data.children); i++ {
 		child := data.children[i]
@@ -23,11 +25,11 @@ func Execute(data *Data, conn net.Conn, ctx *Context) []string {
 				case "ECHO":
 					{
 						str := data.children[i+1].content
-						return []string{encodeBulkString(str)}
+						return []string{encodeBulkString(str)}, false
 					}
 				case "PING":
 					{
-						return []string{PONG}
+						return []string{PONG},false
 					}
 				case "SET":
 					{
@@ -40,33 +42,34 @@ func Execute(data *Data, conn net.Conn, ctx *Context) []string {
 							value,
 							expires,
 						}
-						return []string{encodeSimpleString("OK")}
+						return []string{encodeSimpleString("OK")}, true
 					}
 				case "GET":
 					{
 						key := data.children[i+1].content
 						value, exists := storage[key]
 						if !exists {
-							return []string{NULL_BULK_STRING}
+							return []string{NULL_BULK_STRING}, false
 						}
 						if value.expired() {
-							return []string{NULL_BULK_STRING}
+							return []string{NULL_BULK_STRING}, false
 						}
-						return []string{encodeBulkString(value.value)}
+						return []string{encodeBulkString(value.value)},false
 					}
 				case "INFO":
-					return []string{encodeBulkString(replicationData(ctx))}
+					return []string{encodeBulkString(replicationData(ctx))}, false
 				case "REPLCONF":
-					return []string{OK}
+					return []string{OK}, false
 				case "PSYNC":
-					emptyRDB,_ := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
-					byteslice := fmt.Sprintf("$%d\r\n%s",len(emptyRDB),string(emptyRDB))
-					return []string{encodeSimpleString(fmt.Sprintf("FULLRESYNC %s 0", ctx.info["master_replid"])),byteslice}
+					emptyRDB, _ := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
+					byteslice := fmt.Sprintf("$%d\r\n%s", len(emptyRDB), string(emptyRDB))
+					slaves[&conn] = true
+					return []string{encodeSimpleString(fmt.Sprintf("FULLRESYNC %s 0", ctx.info["master_replid"])), byteslice}, false
 				}
 			}
 		}
 	}
-	return []string{"null"}
+	return []string{"null"}, false
 }
 
 func replicationData(ctx *Context) string {

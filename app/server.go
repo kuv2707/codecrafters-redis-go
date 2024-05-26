@@ -98,9 +98,14 @@ func handleConnection(conn net.Conn, ctx *Context) {
 		}
 		str := string(buf[:len])
 		data, _ := ParseQuery(strings.Split(str, "\r\n"))
-		ress := Execute(&data, conn, ctx)
+		ress, propagate := Execute(&data, conn, ctx)
 		for _, res := range ress {
 			conn.Write([]byte(res))
+		}
+		if propagate {
+			for slave := range slaves {
+				(*slave).Write(buf[:len])
+			}
 		}
 	}
 }
