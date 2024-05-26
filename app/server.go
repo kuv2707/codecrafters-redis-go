@@ -5,7 +5,7 @@ import (
 	"net"
 	"os"
 	"strings"
-	"time"
+	// "time"
 )
 
 type Context struct {
@@ -16,7 +16,6 @@ type Context struct {
 var TEST = 0
 
 func main() {
-	test()
 	args := parseCmdLineArgs()
 	port := args["port"]
 	if port == "" {
@@ -99,53 +98,9 @@ func handleConnection(conn net.Conn, ctx *Context) {
 		}
 		str := string(buf[:len])
 		data, _ := ParseQuery(strings.Split(str, "\r\n"))
-		res := Execute(&data, ctx)
-		conn.Write([]byte(res))
-	}
-
-}
-
-func testQuery(comms []string) {
-	// fmt.Println("testing:", comms)
-	a, _ := ParseQuery(comms)
-	// a.Print("")
-	fmt.Println("->" + Execute(&a, nil))
-}
-
-func test() {
-	fmt.Println(encodeQuery(
-		"REPLCONF",
-		"listening-port",
-		"7788",
-	))
-
-	if TEST != 0 {
-		// // *2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n
-		fmt.Println(time.Now().UnixNano())
-		testQuery([]string{
-			"*5",
-			"$3",
-			"SET",
-			"$9",
-			"blueberry",
-			"$3",
-			"BAR",
-			"$2",
-			"px",
-			":2",
-			"100",
-		})
-		fmt.Println(time.Now().UnixNano())
-		time.Sleep(time.Duration(100) * time.Millisecond)
-		testQuery([]string{
-			"*2",
-			"$3",
-			"GET",
-			"$3",
-			"blueberry",
-		})
-		fmt.Println(time.Now().UnixNano())
-
-		os.Exit(0)
+		ress := Execute(&data, conn, ctx)
+		for _, res := range ress {
+			conn.Write([]byte(res))
+		}
 	}
 }

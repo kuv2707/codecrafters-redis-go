@@ -1,15 +1,17 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math"
+	"net"
 	"strings"
 	"time"
 )
 
 var storage = make(map[string]Value)
 
-func Execute(data *Data, ctx *Context) string {
+func Execute(data *Data, conn net.Conn, ctx *Context) []string {
 	// this data is an array, as per the protocol
 	for i := 0; i < len(data.children); i++ {
 		child := data.children[i]
@@ -21,11 +23,11 @@ func Execute(data *Data, ctx *Context) string {
 				case "ECHO":
 					{
 						str := data.children[i+1].content
-						return encodeBulkString(str)
+						return []string{encodeBulkString(str)}
 					}
 				case "PING":
 					{
-						return PONG
+						return []string{PONG}
 					}
 				case "SET":
 					{
@@ -38,31 +40,33 @@ func Execute(data *Data, ctx *Context) string {
 							value,
 							expires,
 						}
-						return encodeSimpleString("OK")
+						return []string{encodeSimpleString("OK")}
 					}
 				case "GET":
 					{
 						key := data.children[i+1].content
 						value, exists := storage[key]
 						if !exists {
-							return NULL_BULK_STRING
+							return []string{NULL_BULK_STRING}
 						}
 						if value.expired() {
-							return NULL_BULK_STRING
+							return []string{NULL_BULK_STRING}
 						}
-						return encodeBulkString(value.value)
+						return []string{encodeBulkString(value.value)}
 					}
 				case "INFO":
-					return encodeBulkString(replicationData(ctx))
+					return []string{encodeBulkString(replicationData(ctx))}
 				case "REPLCONF":
-					return OK
+					return []string{OK}
 				case "PSYNC":
-					return encodeSimpleString(fmt.Sprintf("FULLRESYNC %s 0", ctx.info["master_replid"]))
+					emptyRDB,_ := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
+					byteslice := fmt.Sprintf("$%d\r\n%s",len(emptyRDB),string(emptyRDB))
+					return []string{encodeSimpleString(fmt.Sprintf("FULLRESYNC %s 0", ctx.info["master_replid"])),byteslice}
 				}
 			}
 		}
 	}
-	return "null"
+	return []string{"null"}
 }
 
 func replicationData(ctx *Context) string {
