@@ -40,13 +40,16 @@ func main() {
 
 		return
 	}
-
-	l, err := net.Listen("tcp", "localhost:6379")
+	port := "6379"
+	if len(os.Args) > 2 {
+		port = os.Args[2]
+	}
+	l, err := net.Listen("tcp", "localhost:"+port)
 	if err != nil {
-		fmt.Println("Failed to bind to port 6379")
+		fmt.Println("Failed to bind to port " + port)
 		os.Exit(1)
 	}
-	fmt.Println("Listening on port 6379")
+	fmt.Println("Listening on port " + port)
 	for {
 		conn, err := l.Accept()
 		if err != nil {
