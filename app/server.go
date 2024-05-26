@@ -16,7 +16,7 @@ type Context struct {
 var TEST = 0
 
 func main() {
-	// test()
+	test()
 	args := parseCmdLineArgs()
 	port := args["port"]
 	if port == "" {
@@ -95,6 +95,12 @@ func testQuery(comms []string) {
 }
 
 func test() {
+	fmt.Println(encodeQuery([]string{
+		"REPLCONF",
+		"listening-port",
+		"7788",
+	}))
+	
 	if TEST != 0 {
 		// // *2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n
 		fmt.Println(time.Now().UnixNano())

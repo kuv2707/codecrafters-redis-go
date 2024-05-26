@@ -62,20 +62,11 @@ func Execute(data *Data, ctx *Context) string {
 }
 
 func replicationData(ctx *Context) string {
-	ret:=""
-	for k,v := range ctx.info {
-		ret += k+":"+v+"\n"
+	ret := ""
+	for k, v := range ctx.info {
+		ret += k + ":" + v + "\n"
 	}
 	return ret
-}
-
-func encodeBulkString(s string) string {
-	l := len(s)
-	return fmt.Sprintf("$%d\r\n%s\r\n", l, s)
-}
-
-func encodeSimpleString(s string) string {
-	return fmt.Sprintf("+%s\r\n", s)
 }
 
 func getDuration(data []Data) time.Duration {
