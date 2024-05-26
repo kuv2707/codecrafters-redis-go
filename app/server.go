@@ -28,6 +28,7 @@ func main() {
 		os.Exit(1)
 	}
 	ctx := Context{master: "self", info: make(map[string]string)}
+	ctx.info["port"] = port
 	if args["replicaof"] != "" {
 		ctx.info["role"] = "slave"
 		ctx.info["master"] = args["replicaof"]
@@ -67,7 +68,22 @@ func connectToMaster(ctx *Context) {
 		return
 	}
 	defer conn.Close()
-	conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
+	conn.Write([]byte(encodeQuery([]string{"PING"})))
+	readConn(conn)
+	conn.Write([]byte(encodeQuery([]string{"REPLCONF", "listening-port", ctx.info["port"]})))
+	readConn(conn)
+	conn.Write([]byte(encodeQuery([]string{"REPLCONF", "capa", "psync2"})))
+
+}
+
+func readConn(conn net.Conn) string {
+	buffer := make([]byte, 1024)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		fmt.Println("Failed to read response:", err)
+		return ""
+	}
+	return string(buffer[:n])
 }
 
 func handleConnection(conn net.Conn, ctx *Context) {
@@ -100,7 +116,7 @@ func test() {
 		"listening-port",
 		"7788",
 	}))
-	
+
 	if TEST != 0 {
 		// // *2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n
 		fmt.Println(time.Now().UnixNano())
