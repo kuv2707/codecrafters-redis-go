@@ -53,12 +53,20 @@ func Execute(data *Data, ctx *Context) string {
 						return encodeBulkString(value.value)
 					}
 				case "INFO":
-					return encodeBulkString("role:"+ctx.role)
+					return encodeBulkString(replicationData(ctx))
 				}
 			}
 		}
 	}
 	return "null"
+}
+
+func replicationData(ctx *Context) string {
+	ret:=""
+	for k,v := range ctx.info {
+		ret += k+":"+v+"\n"
+	}
+	return ret
 }
 
 func encodeBulkString(s string) string {
