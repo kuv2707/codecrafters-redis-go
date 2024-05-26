@@ -73,7 +73,9 @@ func connectToMaster(ctx *Context) {
 	conn.Write([]byte(encodeQuery([]string{"REPLCONF", "listening-port", ctx.info["port"]})))
 	readConn(conn)
 	conn.Write([]byte(encodeQuery([]string{"REPLCONF", "capa", "psync2"})))
-
+	readConn(conn)
+	conn.Write([]byte(encodeQuery([]string{"PSYNC","?","-1"})))
+	
 }
 
 func readConn(conn net.Conn) string {
