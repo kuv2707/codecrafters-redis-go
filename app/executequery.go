@@ -9,7 +9,7 @@ import (
 
 var storage = make(map[string]Value)
 
-func Execute(data *Data) string {
+func Execute(data *Data, ctx *Context) string {
 	// this data is an array, as per the protocol
 	for i := 0; i < len(data.children); i++ {
 		child := data.children[i]
@@ -53,7 +53,7 @@ func Execute(data *Data) string {
 						return encodeBulkString(value.value)
 					}
 				case "INFO":
-					return encodeBulkString("role:master")
+					return encodeBulkString("role:"+ctx.role)
 				}
 			}
 		}
