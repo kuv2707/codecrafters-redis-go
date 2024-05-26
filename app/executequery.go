@@ -56,6 +56,8 @@ func Execute(data *Data, ctx *Context) string {
 					return encodeBulkString(replicationData(ctx))
 				case "REPLCONF":
 					return OK
+				case "PSYNC":
+					return encodeSimpleString(fmt.Sprintf("FULLRESYNC %s 0", ctx.info["master_replid"]))
 				}
 			}
 		}
