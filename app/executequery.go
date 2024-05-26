@@ -21,7 +21,7 @@ func Execute(data *Data) string {
 				case "ECHO":
 					{
 						str := data.children[i+1].content
-						return encodeBlukString(str)
+						return encodeBulkString(str)
 					}
 				case "PING":
 					{
@@ -33,7 +33,7 @@ func Execute(data *Data) string {
 						value := data.children[i+2].content
 						dur := getDuration(data.children[i+3:])
 						expires := time.Now().Add(dur)
-						fmt.Println("set at ",time.Now().UnixMicro())
+						fmt.Println("set at ", time.Now().UnixMicro())
 						storage[key] = Value{
 							value,
 							expires,
@@ -50,8 +50,10 @@ func Execute(data *Data) string {
 						if value.expired() {
 							return NULL_BULK_STRING
 						}
-						return encodeBlukString(value.value)
+						return encodeBulkString(value.value)
 					}
+				case "INFO":
+					return encodeBulkString("role:master")
 				}
 			}
 		}
@@ -59,7 +61,7 @@ func Execute(data *Data) string {
 	return "null"
 }
 
-func encodeBlukString(s string) string {
+func encodeBulkString(s string) string {
 	l := len(s)
 	return fmt.Sprintf("$%d\r\n%s\r\n", l, s)
 }
