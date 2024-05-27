@@ -10,8 +10,9 @@ import (
 )
 
 type Context struct {
-	master string
-	info   map[string]string
+	master    string
+	info      map[string]string
+	offsetACK int
 }
 
 func main() {
@@ -86,8 +87,8 @@ func connectToMaster(ctx *Context) {
 
 }
 
-func expectRDBFile(a string, conn net.Conn, ctx *Context){
-	log("==",len(a), a)
+func expectRDBFile(a string, conn net.Conn, ctx *Context) {
+	log("==", len(a), a)
 	if len(a) > 56 {
 		//rdb file is also present, so nothing to do
 		a = a[56:]
@@ -95,13 +96,14 @@ func expectRDBFile(a string, conn net.Conn, ctx *Context){
 		a = readConn(conn)
 	}
 	// some commands may be present in the end of rdb file, now stored in a. Extract those commands and execute
-	log("cut a",len(a),a+"\n\n")
-	spc := strings.Index(a,"\r\n")
+	// log("cut a",len(a),a+"\n\n")
+	spc := strings.Index(a, "\r\n")
 	log(a[1:spc])
 	size, _ := strconv.Atoi(a[1:spc])
 	a = a[spc+2:]
 	a = a[size:]
-	log("left part ->",a)
+	//todo: a might contain some commands - although tests pass now, they might fail later.
+	log("left part ->", a)
 }
 
 func readConn(conn net.Conn) string {
@@ -141,29 +143,27 @@ func processCommands(commands []string, conn net.Conn, ctx *Context) {
 		}
 	}
 }
-func processCommand(commands []string, conn net.Conn, ctx *Context) int {
+func processCommand(commandlist []string, conn net.Conn, ctx *Context) int {
 
 	r := 0
-	data := ParseQuery(commands, &r)
-	ress, propagate, respond_slave := Execute(&data, conn, ctx)
+	data := ParseQuery(commandlist, &r)
+	propag_cmd := strings.Join(commandlist[:r], "\r\n") + "\r\n" // alternatively, traverse the data and accumulate leaf node contents
+	ress, propagate, respond_slave := Execute(&data, conn, ctx, propag_cmd)
 
 	// slaves don't respond at all (atleast yet)
 	for _, res := range ress {
 		log("response ->", ctx.info["role"], res)
 		if ctx.info["role"] == "master" || respond_slave {
-			log("sent")
 			conn.Write([]byte(res))
-		} else {
-			log("notsent")
 		}
 	}
 
 	if propagate {
 		// for a slave server, the slaves map will be empty
-		// so effectively slaves don't propagate
+		// so effectively slaves don't propagate. propagate being true
+		// means this command has to be considered in ACK offset
+		ctx.offsetACK += len(propag_cmd)
 		for slave := range slaves {
-
-			propag_cmd := strings.Join(commands[:r], "\r\n") + "\r\n" // alternatively, traverse the data and accumulate leaf node contents
 			log("sending to slave", (*slave).RemoteAddr())
 			log("??", propag_cmd, "??")
 			(*slave).Write([]byte(propag_cmd))

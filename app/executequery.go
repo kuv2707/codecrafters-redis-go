@@ -13,7 +13,7 @@ var storage = make(map[string]Value)
 
 var slaves = make(map[*net.Conn]bool)
 
-func Execute(data *Data, conn net.Conn, ctx *Context) ([]string, bool, bool) {
+func Execute(data *Data, conn net.Conn, ctx *Context, cmd string) ([]string, bool, bool) {
 	// this data is an array, as per the protocol
 	for i := 0; i < len(data.children); i++ {
 		child := data.children[i]
@@ -29,6 +29,7 @@ func Execute(data *Data, conn net.Conn, ctx *Context) ([]string, bool, bool) {
 					}
 				case "PING":
 					{
+						updateACKOffset(cmd, ctx)
 						return []string{PONG}, false, false
 					}
 				case "SET":
@@ -63,7 +64,9 @@ func Execute(data *Data, conn net.Conn, ctx *Context) ([]string, bool, bool) {
 					subcomm := data.children[i+1].content
 					if strings.EqualFold(subcomm, "GETACK") {
 						log("GETACK received")
-						return []string{encodeQuery("REPLCONF", "ACK", "0")}, false, true
+						response := encodeQuery("REPLCONF", "ACK", fmt.Sprint(ctx.offsetACK))
+						updateACKOffset(cmd, ctx)
+						return []string{response}, false, true
 					}
 					return []string{OK}, false, false
 				case "PSYNC":
@@ -98,4 +101,8 @@ func getDuration(data []Data) time.Duration {
 		}
 	}
 	return time.Duration(math.MaxInt64)
+}
+
+func updateACKOffset(s string, ctx *Context) {
+	ctx.offsetACK += len(s)
 }
