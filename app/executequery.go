@@ -61,20 +61,28 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmd string) ([]string, boo
 				case "INFO":
 					return []string{encodeBulkString(replicationData(ctx))}, false, true
 				case "REPLCONF":
-					subcomm := data.children[i+1].content
-					if strings.EqualFold(subcomm, "GETACK") {
-						log("GETACK received")
-						response := encodeQuery("REPLCONF", "ACK", fmt.Sprint(ctx.offsetACK))
-						updateACKOffset(cmd, ctx)
-						return []string{response}, false, true
+					{
+						subcomm := data.children[i+1].content
+						if strings.EqualFold(subcomm, "GETACK") {
+							log("GETACK received")
+							response := encodeQuery("REPLCONF", "ACK", fmt.Sprint(ctx.offsetACK))
+							updateACKOffset(cmd, ctx)
+							return []string{response}, false, true
+						}
+						return []string{OK}, false, false
 					}
-					return []string{OK}, false, false
 				case "PSYNC":
-					emptyRDB, _ := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
-					byteslice := fmt.Sprintf("$%d\r\n%s", len(emptyRDB), string(emptyRDB))
-					slaves[&conn] = true
-					log("Added slave", conn.RemoteAddr())
-					return []string{encodeSimpleString(fmt.Sprintf("FULLRESYNC %s 0", ctx.info["master_replid"])), byteslice}, false, false
+					{
+						emptyRDB, _ := hex.DecodeString(EMPTY_RDB_HEX)
+						byteslice := fmt.Sprintf("$%d\r\n%s", len(emptyRDB), string(emptyRDB))
+						slaves[&conn] = true
+						log("Added slave", conn.RemoteAddr())
+						return []string{encodeSimpleString(fmt.Sprintf("FULLRESYNC %s 0", ctx.info["master_replid"])), byteslice}, false, false
+					}
+				case "WAIT":
+					{
+						return []string{encodeInteger(0)}, false, true
+					}
 				}
 			}
 		}

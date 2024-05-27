@@ -102,7 +102,11 @@ func expectRDBFile(a string, conn net.Conn, ctx *Context) {
 	size, _ := strconv.Atoi(a[1:spc])
 	a = a[spc+2:]
 	a = a[size:]
-	//todo: a might contain some commands - although tests pass now, they might fail later.
+	if len(a)> 0 && a[0] == '*' {
+		str := strings.Trim(a, "\r\n")
+		commands := strings.Split(str, CRLF)
+		processCommands(commands, conn, ctx)
+	}
 	log("left part ->", a)
 }
 
