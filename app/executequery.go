@@ -81,7 +81,7 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmd string) ([]string, boo
 					}
 				case "WAIT":
 					{
-						return []string{encodeInteger(0)}, false, true
+						return []string{encodeInteger(len(slaves))}, false, true
 					}
 				}
 			}
