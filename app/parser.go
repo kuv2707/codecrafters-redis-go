@@ -14,7 +14,7 @@ func parseHeader(header string) (byte, int) {
 }
 
 func ParseQuery(query []string, read *int) Data {
-	log(*read)
+	// log(*read)
 	kind, size := parseHeader(query[*read])
 	switch kind {
 	case '*':

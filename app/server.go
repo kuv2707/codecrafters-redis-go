@@ -12,7 +12,19 @@ import (
 type Context struct {
 	master    string
 	info      map[string]string
+	cmdArgs   map[string]string
 	offsetACK int
+	slaves    map[*net.Conn]bool
+}
+
+type SenderType = int
+
+const CLIENT SenderType = 1
+const MASTER SenderType = 2
+
+type CommandContext struct {
+	command string
+	sender  SenderType
 }
 
 func main() {
@@ -22,7 +34,7 @@ func main() {
 	if port == "" {
 		port = "6379"
 	}
-	ctx := Context{master: "self", info: make(map[string]string)}
+	ctx := Context{master: "self", info: make(map[string]string), slaves: make(map[*net.Conn]bool), cmdArgs: args}
 	ctx.info["port"] = port
 	if args["replicaof"] != "" {
 		ctx.info["role"] = "slave"
@@ -50,7 +62,7 @@ func main() {
 		} else {
 			fmt.Println("Connection accepted successfully!")
 		}
-		go handleConnection(conn, &ctx)
+		go handleConnection(conn, &ctx, CLIENT)
 		// l.Close()
 	}
 }
@@ -83,7 +95,7 @@ func connectToMaster(ctx *Context) {
 	log("master says", a)
 	// parsePSYNCResponse(a)
 	expectRDBFile(a, conn, ctx)
-	handleConnection(conn, ctx)
+	handleConnection(conn, ctx, MASTER)
 
 }
 
@@ -102,10 +114,10 @@ func expectRDBFile(a string, conn net.Conn, ctx *Context) {
 	size, _ := strconv.Atoi(a[1:spc])
 	a = a[spc+2:]
 	a = a[size:]
-	if len(a)> 0 && a[0] == '*' {
+	if len(a) > 0 && a[0] == '*' {
 		str := strings.Trim(a, "\r\n")
 		commands := strings.Split(str, CRLF)
-		processCommands(commands, conn, ctx)
+		processCommands(commands, conn, ctx, MASTER)
 	}
 	log("left part ->", a)
 }
@@ -120,7 +132,7 @@ func readConn(conn net.Conn) string {
 	return string(buffer[:n])
 }
 
-func handleConnection(conn net.Conn, ctx *Context) {
+func handleConnection(conn net.Conn, ctx *Context, sender SenderType) {
 	// defer conn.Close()
 	buf := make([]byte, 1024)
 	for {
@@ -134,45 +146,34 @@ func handleConnection(conn net.Conn, ctx *Context) {
 		for _, c := range commands {
 			log("->", c)
 		}
-		processCommands(commands, conn, ctx)
+		processCommands(commands, conn, ctx, sender)
 	}
 }
 
-func processCommands(commands []string, conn net.Conn, ctx *Context) {
+
+func processCommands(commands []string, conn net.Conn, ctx *Context, sender SenderType) {
 	read := 0
 	for true {
-		read += processCommand(commands[read:], conn, ctx)
+		read += processCommand(commands[read:], conn, ctx, sender)
 		if read >= len(commands) {
 			break
 		}
 	}
 }
-func processCommand(commandlist []string, conn net.Conn, ctx *Context) int {
+func processCommand(commandlist []string, conn net.Conn, ctx *Context, sender SenderType) int {
 
 	r := 0
 	data := ParseQuery(commandlist, &r)
 	propag_cmd := strings.Join(commandlist[:r], "\r\n") + "\r\n" // alternatively, traverse the data and accumulate leaf node contents
-	ress, propagate, respond_slave := Execute(&data, conn, ctx, propag_cmd)
 
-	// slaves don't respond at all (atleast yet)
-	for _, res := range ress {
-		log("response ->", ctx.info["role"], res)
-		if ctx.info["role"] == "master" || respond_slave {
-			conn.Write([]byte(res))
-		}
+	cmdctx := CommandContext{
+		command: propag_cmd,
+		sender:  sender,
 	}
-
-	if propagate {
-		// for a slave server, the slaves map will be empty
-		// so effectively slaves don't propagate. propagate being true
-		// means this command has to be considered in ACK offset
-		ctx.offsetACK += len(propag_cmd)
-		for slave := range slaves {
-			log("sending to slave", (*slave).RemoteAddr())
-			log("??", propag_cmd, "??")
-			(*slave).Write([]byte(propag_cmd))
-
-		}
+	// prop, respslv
+	Execute(&data, conn, ctx, &cmdctx)
+	if sender == MASTER {
+		updateACKOffset(propag_cmd, ctx)
 	}
 
 	return r

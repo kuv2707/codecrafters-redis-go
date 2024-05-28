@@ -11,10 +11,10 @@ import (
 
 var storage = make(map[string]Value)
 
-var slaves = make(map[*net.Conn]bool)
+var ackInfo = make(map[string]int)
 
-func Execute(data *Data, conn net.Conn, ctx *Context, cmd string) ([]string, bool, bool) {
-	// this data is an array, as per the protocol
+func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
+	// this data is a resp array, as per the protocol
 	for i := 0; i < len(data.children); i++ {
 		child := data.children[i]
 		switch child.kind {
@@ -25,12 +25,11 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmd string) ([]string, boo
 				case "ECHO":
 					{
 						str := data.children[i+1].content
-						return []string{encodeBulkString(str)}, false, false
+						respond(conn, encodeBulkString(str))
 					}
 				case "PING":
 					{
-						updateACKOffset(cmd, ctx)
-						return []string{PONG}, false, false
+						respondIfMaster(ctx, conn, PONG)
 					}
 				case "SET":
 					{
@@ -38,56 +37,139 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmd string) ([]string, boo
 						value := data.children[i+2].content
 						dur := getDuration(data.children[i+3:])
 						expires := time.Now().Add(dur)
-						fmt.Println("set at ", time.Now().UnixMicro())
 						storage[key] = Value{
 							value,
 							expires,
 						}
-						return []string{encodeSimpleString("OK")}, true, false
+						respondIfMaster(ctx, conn, OK)
+						propagateCommand(cmdctx, ctx)
 					}
 				case "GET":
 					{
 						key := data.children[i+1].content
 						value, exists := storage[key]
 						fmt.Println(storage)
-						if !exists {
-							return []string{NULL_BULK_STRING}, false, true
+						response := ""
+						if !exists || value.expired() {
+							response = NULL_BULK_STRING
+						} else {
+							response = encodeBulkString(value.value)
 						}
-						if value.expired() {
-							return []string{NULL_BULK_STRING}, false, true
-						}
-						return []string{encodeBulkString(value.value)}, false, true
+						respond(conn, response)
 					}
 				case "INFO":
-					return []string{encodeBulkString(replicationData(ctx))}, false, true
+					{
+						respond(conn, encodeBulkString(replicationData(ctx)))
+					}
 				case "REPLCONF":
 					{
+						log("RECEIVED REPLCONF", ctx.offsetACK)
 						subcomm := data.children[i+1].content
-						if strings.EqualFold(subcomm, "GETACK") {
-							log("GETACK received")
-							response := encodeQuery("REPLCONF", "ACK", fmt.Sprint(ctx.offsetACK))
-							updateACKOffset(cmd, ctx)
-							return []string{response}, false, true
+						switch strings.ToUpper(subcomm) {
+						case "GETACK":
+							respond(conn, encodeQuery("REPLCONF", "ACK", fmt.Sprint(ctx.offsetACK)))
+						case "ACK":
+							{
+								slaveack := strtoint(data.children[i+2].content)
+								laddr := conn.RemoteAddr().String()
+								ackInfo[laddr] = slaveack
+								ackUpdateChan <- AckUpdate{
+									laddr:  laddr,
+									ackVal: ackInfo[laddr],
+								}
+								log("Update ACK of", conn.RemoteAddr().String(), " to ", slaveack)
+								// respond(conn, OK)
+							}
+						default:
+							respond(conn, OK)
 						}
-						return []string{OK}, false, false
 					}
 				case "PSYNC":
 					{
 						emptyRDB, _ := hex.DecodeString(EMPTY_RDB_HEX)
 						byteslice := fmt.Sprintf("$%d\r\n%s", len(emptyRDB), string(emptyRDB))
-						slaves[&conn] = true
-						log("Added slave", conn.RemoteAddr())
-						return []string{encodeSimpleString(fmt.Sprintf("FULLRESYNC %s 0", ctx.info["master_replid"])), byteslice}, false, false
+						ctx.slaves[&conn] = true
+						ackInfo[conn.RemoteAddr().String()] = 0
+						log("Added slave", conn.RemoteAddr().String())
+						respond(conn, encodeSimpleString(fmt.Sprintf("FULLRESYNC %s 0", ctx.info["master_replid"])))
+						respond(conn, byteslice)
 					}
 				case "WAIT":
 					{
-						return []string{encodeInteger(len(slaves))}, false, true
+						replNo := data.children[i+1].content
+						timeout := data.children[i+2].content
+						handleWait(strtoint(replNo), strtoint(timeout), conn, ctx)
+						// respond(conn, encodeInteger(len(ctx.slaves)))
+					}
+				case "CONFIG":
+					{
+						subcomm := data.children[i+1].content
+						switch strings.ToUpper(subcomm) {
+						case "GET":
+							{
+								key := data.children[i+2].content
+								respond(conn, encodeQuery((key), (ctx.cmdArgs[key])))
+							}
+						}
 					}
 				}
+				return // we need to return after processing this
+			}
+		case '*':
+			{
+				// maybe used when pipelining etc
+				// recursively call Execute with this child
 			}
 		}
 	}
-	return []string{"null"}, false, false
+	panic("Unhandled command")
+}
+
+type AckUpdate struct {
+	laddr  string
+	ackVal int
+}
+
+var ackUpdateChan = make(chan AckUpdate)
+
+func handleWait(replNo int, timeout int, conn net.Conn, ctx *Context) {
+	log("SERVER ACK is", ctx.offsetACK)
+	if ctx.offsetACK == 0 {
+		// obv slaves will also give 0, so dont even ask them
+		respond(conn, encodeInteger(len(ctx.slaves)))
+		return
+	}
+
+	// propagating this command increases server ACK by 37, but clients
+	// will not acknowledge it till the next getack call.
+	propagateCommand(&CommandContext{
+		command: encodeQuery("REPLCONF", "GETACK", "*"),
+		sender:  MASTER,
+	}, ctx)
+	valids := make(map[string]int)
+	timeoutCh := time.After(time.Duration(timeout) * time.Millisecond)
+	for true {
+		select {
+		case <-timeoutCh:
+			{
+				respond(conn, encodeInteger(len(valids)))
+				return
+			}
+		case upd := <-ackUpdateChan:
+			{
+
+				fmt.Println("ACK update received", upd, ctx.offsetACK)
+				if upd.ackVal+37 == ctx.offsetACK {
+					valids[upd.laddr] = 1
+				}
+				if len(valids) == replNo {
+					respond(conn, encodeInteger(replNo))
+					return
+				}
+			}
+		}
+
+	}
 }
 
 func replicationData(ctx *Context) string {
@@ -112,5 +194,28 @@ func getDuration(data []Data) time.Duration {
 }
 
 func updateACKOffset(s string, ctx *Context) {
+	log(ctx.info["role"], "Updating ACKOFF by ", len(s), " due to command ", s)
 	ctx.offsetACK += len(s)
+}
+
+func propagateCommand(cmdctx *CommandContext, ctx *Context) {
+	if ctx.info["role"] == "slave" {
+		return
+	}
+	updateACKOffset(cmdctx.command, ctx)
+	for slave := range ctx.slaves {
+		log("sending to slave", (*slave).RemoteAddr())
+		log("??", cmdctx.command, "??")
+		(*slave).Write([]byte(cmdctx.command))
+	}
+}
+
+func respondIfMaster(ctx *Context, conn net.Conn, res string) {
+	if ctx.info["role"] == "master" {
+		respond(conn, res)
+	}
+}
+
+func respond(conn net.Conn, res string) {
+	conn.Write([]byte(res))
 }
