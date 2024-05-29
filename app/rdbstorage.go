@@ -14,39 +14,58 @@ func testrdb() {
 	os.Exit(0)
 }
 
-func loadRDB(ctx *Context) string {
+func loadRDB(ctx *Context) {
 	args := ctx.cmdArgs
 	path := args["dir"] + "/" + args["dbfilename"]
 	log(path)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		log(err)
-		return ""
+		return
 	}
 	fmt.Printf("%x\n", data)
 	ptr := 0
-	return parseBytes(data, &ptr)
+	parseBytes(data, &ptr, ctx)
 	// return data
 }
 
-// 52 45 44 49 53 30 30 30 33 fa 0a 72 65 64 69 73 2d 62 69 74 73 c0 40 fa 09 72 65 64 69 73 2d 76 65 72 05 37 2e 32 2e 30 fe 00 fb 01 00 00 06 62 61 6e 61 6e 61 05 6d 61 6e 67 6f ff 2f ce 15 1d 67 ca 3c 2a 0a 
+// 52 45 44 49 53 30 30 30 33 fa 0a 72 65 64 69 73 2d 62 69 74 73 c0 40 fa 09 72 65 64 69 73 2d 76 65 72 05 37 2e 32 2e 30 fe 00 fb 01 00 00 06 62 61 6e 61 6e 61 05 6d 61 6e 67 6f ff 2f ce 15 1d 67 ca 3c 2a 0a
+// why 3 bytes after fb before string begins
 
-func parseBytes(data []byte, p *int) string {
+
+// 52 45 44 49 53 30 30 30 33 fa 0a 72 65 64 69 73 2d 62 69 74 73 c0 40 fa 09 72 65 64 69 73 2d 76 65 72 05 37 2e 32 2e 30 fe 00 fb 04 00 00 09 70 69 6e 65 61 70 70 6c 65 09 62 6c 75 65 62 65 72 72 79 00 06 62 61 6e 61 6e 61 09 70 69 6e 65 61 70 70 6c 65 00 06 6f 72 61 6e 67 65 05 6d 61 6e 67 6f 00 09 62 6c 75 65 62 65 72 72 79 05 61 70 70 6c 65 ff 61 22 1d fd 84 0d 3a 64 0a
+
+func parseBytes(data []byte, p *int, ctx *Context) {
 	for data[*p] != 0xfb {
 		*p += 1
 	}
 	*p += 1
-	parseLengthEncoded(data, p)
+	numKeys := parseLengthEncoded(data, p)
 	*p += 1
 	parseLengthEncoded(data, p)
-	*p += 1
-	parseLengthEncoded(data, p)
-	*p += 1
-	strlen := parseLengthEncoded(data, p)
-	*p += 1
-	str := string(data[*p : *p+strlen])
-	return str
+	*p += 2
+	for numKeys > 0 {
+		numKeys -= 1
+		key, val := parseKV(data, p)
+		*p+=1
+		log("read - ",key,val)
+		ctx.storage[key] = nonExpireValue(val)
 
+	}
+	return
+
+}
+
+func parseKV(data []byte, p *int) (string, string) {
+	keylen := parseLengthEncoded(data, p)
+	*p += 1
+	key := string(data[*p : *p+keylen])
+	*p += keylen
+	vallen := parseLengthEncoded(data, p)
+	*p += 1
+	val := string(data[*p : *p+vallen])
+	*p += vallen
+	return key, val
 }
 
 // pointer should point to the start of the length encoding

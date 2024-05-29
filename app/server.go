@@ -46,7 +46,7 @@ func main() {
 		ctx.info["master_repl_offset"] = "0"
 	}
 	loadRDB(&ctx)
-
+	log(ctx.storage)
 	if ctx.info["role"] == "slave" {
 		go connectToMaster(&ctx)
 

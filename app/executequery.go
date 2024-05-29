@@ -47,6 +47,7 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						key := data.children[i+1].content
 						value, exists := ctx.storage[key]
 						response := ""
+						log(ctx.storage)
 						if !exists || value.expired() {
 							response = NULL_BULK_STRING
 						} else {
@@ -111,7 +112,11 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 					}
 				case "KEYS":
 					{
-						respond(conn, encodeQuery(loadRDB(ctx)))
+						keys := make([]string, 0, len(ctx.storage))
+						for k := range ctx.storage {
+							keys = append(keys, k)
+						}
+						respond(conn, encodeQuery(keys...))
 					}
 				}
 				return // we need to return after processing this
