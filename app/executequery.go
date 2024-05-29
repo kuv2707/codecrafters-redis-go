@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-var storage = make(map[string]Value)
-
 var ackInfo = make(map[string]int)
 
 func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
@@ -37,7 +35,7 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						value := data.children[i+2].content
 						dur := getDuration(data.children[i+3:])
 						expires := time.Now().Add(dur)
-						storage[key] = Value{
+						ctx.storage[key] = Value{
 							value,
 							expires,
 						}
@@ -47,8 +45,7 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 				case "GET":
 					{
 						key := data.children[i+1].content
-						value, exists := storage[key]
-						fmt.Println(storage)
+						value, exists := ctx.storage[key]
 						response := ""
 						if !exists || value.expired() {
 							response = NULL_BULK_STRING
@@ -108,9 +105,13 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						case "GET":
 							{
 								key := data.children[i+2].content
-								respond(conn, encodeQuery((key), (ctx.cmdArgs[key])))
+								respond(conn, encodeQuery(key, ctx.cmdArgs[key]))
 							}
 						}
+					}
+				case "KEYS":
+					{
+						respond(conn, encodeQuery(loadRDB(ctx)))
 					}
 				}
 				return // we need to return after processing this

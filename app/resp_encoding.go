@@ -21,6 +21,7 @@ func encodeInteger(a int) string {
 	return fmt.Sprintf(":%d\r\n", a)
 }
 
+// encodes the words passed and composes a query (array with encoded words)
 func encodeQuery(words ...string) string {
 	ret := fmt.Sprintf("*%d\r\n", len(words))
 	for _, word := range words {

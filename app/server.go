@@ -13,6 +13,7 @@ type Context struct {
 	master    string
 	info      map[string]string
 	cmdArgs   map[string]string
+	storage   map[string]Value
 	offsetACK int
 	slaves    map[*net.Conn]bool
 }
@@ -28,13 +29,13 @@ type CommandContext struct {
 }
 
 func main() {
-	// test()
+	// testrdb()
 	args := parseCmdLineArgs()
 	port := args["port"]
 	if port == "" {
 		port = "6379"
 	}
-	ctx := Context{master: "self", info: make(map[string]string), slaves: make(map[*net.Conn]bool), cmdArgs: args}
+	ctx := Context{master: "self", info: make(map[string]string), slaves: make(map[*net.Conn]bool), cmdArgs: args, storage: make(map[string]Value)}
 	ctx.info["port"] = port
 	if args["replicaof"] != "" {
 		ctx.info["role"] = "slave"
@@ -44,6 +45,8 @@ func main() {
 		ctx.info["master_replid"] = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
 		ctx.info["master_repl_offset"] = "0"
 	}
+	loadRDB(&ctx)
+
 	if ctx.info["role"] == "slave" {
 		go connectToMaster(&ctx)
 
@@ -149,7 +152,6 @@ func handleConnection(conn net.Conn, ctx *Context, sender SenderType) {
 		processCommands(commands, conn, ctx, sender)
 	}
 }
-
 
 func processCommands(commands []string, conn net.Conn, ctx *Context, sender SenderType) {
 	read := 0
