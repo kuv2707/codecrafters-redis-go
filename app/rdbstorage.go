@@ -61,7 +61,7 @@ func parseBytes(data []byte, p *int, ctx *Context) {
 func parseKV(data []byte, p *int) (string, Value) {
 	optionalopc := data[*p]
 	log("opc", optionalopc)
-	value := Value{expires: infiniteTime()}
+	value := Value{expires: infiniteTime(), datatype: STRING_TYPE}
 	switch optionalopc {
 	case 0xfc: // the expiry time is in little endian format
 		{

@@ -7,8 +7,14 @@ import (
 
 type Value struct {
 	value   string
+	datatype string
 	expires time.Time
 }
+
+const STRING_TYPE = "string"
+const STREAM_TYPE = "stream"
+
+
 
 func (value *Value) expired() bool {
 	log("expires at ",value.expires)

@@ -36,10 +36,25 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						dur := getDuration(data.children[i+3:])
 						expires := time.Now().Add(dur)
 						ctx.storage[key] = Value{
-							value,
-							expires,
+							value:    value,
+							expires:  expires,
+							datatype: STRING_TYPE,
 						}
 						respondIfMaster(ctx, conn, OK)
+						propagateCommand(cmdctx, ctx)
+					}
+				case "XADD":
+					{
+						stream_key := data.children[i+1].content
+						entry_id := data.children[i+2].content
+						key := data.children[i+3].content
+						value := data.children[i+4].content
+						ctx.storage[stream_key] = Value{
+							value:    encodeQuery(entry_id, key, value),
+							expires:  infiniteTime(),
+							datatype: STREAM_TYPE,
+						}
+						respondIfMaster(ctx, conn, encodeSimpleString(entry_id))
 						propagateCommand(cmdctx, ctx)
 					}
 				case "GET":
@@ -64,7 +79,7 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						if !exists || value.expired() {
 							response = encodeSimpleString("none")
 						} else {
-							response = encodeSimpleString("string")
+							response = encodeSimpleString(value.datatype)
 						}
 						respond(conn, response)
 					}
