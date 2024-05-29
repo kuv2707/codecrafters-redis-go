@@ -55,6 +55,19 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						}
 						respond(conn, response)
 					}
+				case "TYPE":
+					{
+						key := data.children[i+1].content
+						value, exists := ctx.storage[key]
+						response := ""
+						log(ctx.storage)
+						if !exists || value.expired() {
+							response = encodeSimpleString("none")
+						} else {
+							response = encodeSimpleString("string")
+						}
+						respond(conn, response)
+					}
 				case "INFO":
 					{
 						respond(conn, encodeBulkString(replicationData(ctx)))

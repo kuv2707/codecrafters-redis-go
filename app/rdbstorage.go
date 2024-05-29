@@ -63,7 +63,7 @@ func parseKV(data []byte, p *int) (string, Value) {
 	log("opc", optionalopc)
 	value := Value{expires: infiniteTime()}
 	switch optionalopc {
-	case 0xfc:
+	case 0xfc: // the expiry time is in little endian format
 		{
 			*p += 1
 			value.expires = time.Time(time.UnixMilli(bytestoint64(data, p)))
@@ -111,6 +111,8 @@ func parseLengthEncoded(data []byte, p *int) int {
 	return -1
 }
 
+
+// the following fns are for little endian
 func bytestoint(data []byte, p *int) int {
 	var num int = 0
 	bitshift := 0
