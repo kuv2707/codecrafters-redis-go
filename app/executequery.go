@@ -104,23 +104,39 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 					}
 				case "XREAD":
 					{
-						streams := xread(mapDataArrayToContent(data.children[i+2:]), ctx)
-						respcoll := make([]string, 0)
-						for s := range streams {
-							collected := streams[s].entries
-							entrycoll := make([]string, 0)
-							for i := range collected {
-								q := encodeQuery(collected[i].data...)
-								s := encodeBulkString(collected[i].id)
-								entrycoll = append(entrycoll, encodeRawQuery(s, q))
+
+						xreadresponder := func(dataArray []Data) {
+
+							streams := xread(mapDataArrayToContent(dataArray), ctx)
+							if len(streams) == 0 {
+								respond(conn, NULL_BULK_STRING)
+							} else {
+								respcoll := make([]string, 0)
+								for s := range streams {
+									collected := streams[s].entries
+									entrycoll := make([]string, 0)
+									for i := range collected {
+										q := encodeQuery(collected[i].data...)
+										s := encodeBulkString(collected[i].id)
+										entrycoll = append(entrycoll, encodeRawQuery(s, q))
+									}
+									s := encodeBulkString(streams[s].id)
+									q := encodeRawQuery(entrycoll...)
+									respcoll = append(respcoll, encodeRawQuery(s, q))
+								}
+								respstr := encodeRawQuery(respcoll...)
+								log("XREAD->", respstr, "END")
+								respond(conn, respstr)
 							}
-							s := encodeBulkString(streams[s].id)
-							q := encodeRawQuery(entrycoll...)
-							respcoll = append(respcoll, encodeRawQuery(s, q))
 						}
-						respstr := encodeRawQuery(respcoll...)
-						log("XREAD->", respstr, "END")
-						respond(conn, respstr)
+						if strings.EqualFold(data.children[i+1].content, "block") {
+							durMS := strtoint(data.children[i+2].content)
+							time.AfterFunc(time.Duration(durMS)*time.Millisecond, func() {
+								xreadresponder(data.children[i+4:])
+							})
+						} else {
+							xreadresponder(data.children[i+2:])
+						}
 					}
 				case "TYPE":
 					{

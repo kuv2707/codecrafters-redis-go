@@ -144,7 +144,6 @@ func xrange(s *Stream, start_entry_id string, end_entry_id string, ctx *Context)
 	start_entry_id = insertHyphen(start_entry_id, 0)
 	end_entry_id = insertHyphen(end_entry_id, math.MaxInt64)
 	collected := make([]StreamEntry, 0)
-	log("filtering",start_entry_id, end_entry_id, s.entries)
 	for i := range s.entries {
 		if isIdInRangeInc(s.entries[i].id, start_entry_id, end_entry_id) {
 			collected = append(collected, s.entries[i])
@@ -160,10 +159,12 @@ func xread(args []string, ctx *Context) []Stream {
 		stream := getStream(args[i], ctx)
 		selected := xrange(stream, justGreater(args[i+l/2]), "+", ctx)
 		log(selected)
-		collected = append(collected, Stream{
-			id:      stream.id,
-			entries: selected,
-		})
+		if len(selected) > 0 {
+			collected = append(collected, Stream{
+				id:      stream.id,
+				entries: selected,
+			})
+		}
 	}
 	return collected
 }
