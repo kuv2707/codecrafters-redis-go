@@ -94,12 +94,32 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						collected := xrange(getStream(stream_key, ctx), start_entry_id, end_entry_id, ctx)
 						respcoll := make([]string, 0)
 						for i := range collected {
-							q:=encodeQuery(collected[i].data...)
-							s:=encodeBulkString(collected[i].id)
-							respcoll = append(respcoll, encodeRawQuery(s,q))
+							q := encodeQuery(collected[i].data...)
+							s := encodeBulkString(collected[i].id)
+							respcoll = append(respcoll, encodeRawQuery(s, q))
 						}
 						respstr := encodeRawQuery(respcoll...)
-						log("RES->",respstr,"END")
+						log("RES->", respstr, "END")
+						respond(conn, respstr)
+					}
+				case "XREAD":
+					{
+						streams := xread(mapDataArrayToContent(data.children[i+2:]), ctx)
+						respcoll := make([]string, 0)
+						for s := range streams {
+							collected := streams[s].entries
+							entrycoll := make([]string, 0)
+							for i := range collected {
+								q := encodeQuery(collected[i].data...)
+								s := encodeBulkString(collected[i].id)
+								entrycoll = append(entrycoll, encodeRawQuery(s, q))
+							}
+							s := encodeBulkString(streams[s].id)
+							q := encodeRawQuery(entrycoll...)
+							respcoll = append(respcoll, encodeRawQuery(s, q))
+						}
+						respstr := encodeRawQuery(respcoll...)
+						log("XREAD->", respstr, "END")
 						respond(conn, respstr)
 					}
 				case "TYPE":

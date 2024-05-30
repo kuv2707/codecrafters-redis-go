@@ -139,17 +139,39 @@ func xrange(s *Stream, start_entry_id string, end_entry_id string, ctx *Context)
 		start_entry_id = s.entries[0].id
 	}
 	if end_entry_id == "+" {
-		end_entry_id = s.entries[len(s.entries) - 1].id
+		end_entry_id = s.entries[len(s.entries)-1].id
 	}
 	start_entry_id = insertHyphen(start_entry_id, 0)
 	end_entry_id = insertHyphen(end_entry_id, math.MaxInt64)
 	collected := make([]StreamEntry, 0)
+	log("filtering",start_entry_id, end_entry_id, s.entries)
 	for i := range s.entries {
 		if isIdInRangeInc(s.entries[i].id, start_entry_id, end_entry_id) {
 			collected = append(collected, s.entries[i])
 		}
 	}
 	return collected
+}
+
+func xread(args []string, ctx *Context) []Stream {
+	l := len(args)
+	collected := make([]Stream, 0)
+	for i := 0; i < l/2; i++ {
+		stream := getStream(args[i], ctx)
+		selected := xrange(stream, justGreater(args[i+l/2]), "+", ctx)
+		log(selected)
+		collected = append(collected, Stream{
+			id:      stream.id,
+			entries: selected,
+		})
+	}
+	return collected
+}
+
+func justGreater(id string) string {
+	c := getComps(insertHyphen(id, 0))
+	return fmt.Sprintf("%d-%d", c[0], c[1]+1)
+
 }
 
 func isIdInRangeInc(id string, low string, high string) bool {
