@@ -51,15 +51,16 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						value := data.children[i+4].content
 						storedVal, exists := ctx.storage[stream_key]
 						var err error
+						stored_id := ""
 						if exists && storedVal.datatype == STREAM_TYPE {
 							log("adding to existing stream")
 							s := storedVal.value.(*Stream)
-							err = s.appendEntry(entry_id, key, value)
+							stored_id, err = s.appendEntry(entry_id, key, value)
 
 						} else {
 							log("adding to new stream")
 							newstream := createStream(stream_key)
-							err = newstream.appendEntry(entry_id, key, value)
+							stored_id, err = newstream.appendEntry(entry_id, key, value)
 							ctx.storage[stream_key] = Value{
 								value:    newstream,
 								expires:  infiniteTime(),
@@ -69,7 +70,7 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						if err != nil {
 							respondIfMaster(ctx, conn, encodeErrorString(err.Error()))
 						} else {
-							respondIfMaster(ctx, conn, encodeSimpleString(entry_id))
+							respondIfMaster(ctx, conn, encodeSimpleString(stored_id))
 							propagateCommand(cmdctx, ctx)
 						}
 					}

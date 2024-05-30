@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -22,40 +23,93 @@ func createStream(id string) *Stream {
 	}
 }
 
-func (s *Stream) appendEntry(id string, key string, value string) error {
-	if id == "0-0" {
-		return errors.New("ERR The ID specified in XADD must be greater than 0-0")
+func (s *Stream) appendEntry(id string, key string, value string) (string, error) {
+	newid, err := validateId(id, s.entries)
+	if err != nil {
+		return "", err
 	}
-	if len(s.entries) > 0 {
-		lastEntry := s.entries[len(s.entries)-1]
-		if compareID(id, lastEntry.id) != 1 {
-			return errors.New("ERR The ID specified in XADD is equal or smaller than the target stream top item")
-		}
-	}
-	s.entries = append(s.entries, StreamEntry{id: id, data: key + string(0xff) + value})
+	s.entries = append(s.entries, StreamEntry{id: newid, data: key + string(0xff) + value})
 	log(s.entries)
-	return nil
+	return newid, nil
 }
 
-func compareID(first string, second string) int {
-	firstparts := strings.Split(first, "-")
-	secondparts := strings.Split(second, "-")
-	log("comparing", firstparts, secondparts)
-	ms1 := strtoint(firstparts[0])
-	ms2 := strtoint(secondparts[0])
-	if ms1 > ms2 {
-		return 1
-	} else if ms1 < ms2 {
-		return -1
-	} else {
-		se1 := strtoint(firstparts[1])
-		se2 := strtoint(secondparts[1])
-		if se1 > se2 {
-			return 1
-		} else if se1 < se2 {
-			return -1
+func validateId(id string, entries []StreamEntry) (string, error) {
+	if id == "0-0" {
+		return "", errors.New("ERR The ID specified in XADD must be greater than 0-0")
+	}
+	parts := strings.Split(id, "-")
+	log("processing ", parts, entries)
+	if len(entries) == 0 {
+		//this is the first id
+		if parts[0] == "0" {
+			if parts[1] == "*" {
+				log("hereee")
+				return parts[0] + "-1", nil
+			} else {
+				return id, nil
+			}
 		} else {
-			return 0
+			if parts[1] == "*" {
+				return parts[0] + "-0", nil
+			} else {
+				return id, nil
+			}
+		}
+	} else {
+		lastparts := strings.Split(entries[len(entries)-1].id, "-")
+		if isGreater(parts[0], lastparts[0]) {
+			if parts[1] == "*" {
+				// parts[0] is not 0, as it is greater than some no.
+				return parts[0] + "-0", nil
+			} else {
+				return id, nil
+			}
+		} else if isEqual(parts[0], lastparts[0]) {
+			if parts[1] == "*" {
+				lastSeqNo := strtoint(lastparts[1])
+				return parts[0] + "-" + fmt.Sprint(lastSeqNo+1), nil
+			} else {
+				if isGreater(parts[1], lastparts[1]) {
+					return id, nil
+				} else {
+					return "", errors.New("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+				}
+			}
+		} else {
+			return "", errors.New("ERR The ID specified in XADD is equal or smaller than the target stream top item")
 		}
 	}
+
+}
+
+func isGreater(first string, second string) bool {
+	ms1 := strtoint(first)
+	ms2 := strtoint(second)
+	return ms1 > ms2
+}
+func isEqual(first string, second string) bool {
+	ms1 := strtoint(first)
+	ms2 := strtoint(second)
+	return ms1 == ms2
+}
+
+func filterAsterisks(id string, store []StreamEntry) string {
+	parts := strings.Split(id, "-")
+	timestamp := strtoint(parts[0])
+	replace := ""
+	if len(store) > 0 {
+		last := store[len(store)-1]
+		lastparts := strings.Split(last.id, "-")
+		lastts := strtoint(lastparts[0])
+		if lastts == timestamp {
+			replace = "0"
+		}
+	}
+	if len(store) == 0 {
+		replace = "1"
+	} else {
+		replace = "0"
+	}
+	parts[1] = strings.Replace(parts[1], "*", replace, 1)
+	return strings.Join(parts, "-")
 }
