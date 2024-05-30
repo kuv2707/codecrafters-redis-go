@@ -135,7 +135,12 @@ func getComps(id string) [2]int64 {
 }
 
 func xrange(s *Stream, start_entry_id string, end_entry_id string, ctx *Context) []StreamEntry {
-	log("data",s.entries)
+	if start_entry_id == "-" {
+		start_entry_id = s.entries[0].id
+	}
+	if end_entry_id == "+" {
+		end_entry_id = s.entries[len(s.entries) - 1].id
+	}
 	start_entry_id = insertHyphen(start_entry_id, 0)
 	end_entry_id = insertHyphen(end_entry_id, math.MaxInt64)
 	collected := make([]StreamEntry, 0)
