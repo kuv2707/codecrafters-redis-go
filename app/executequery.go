@@ -11,6 +11,9 @@ import (
 
 var ackInfo = make(map[string]int64)
 
+// a dirty and leaky way 
+var xreadcb func()
+
 func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 	// this data is a resp array, as per the protocol
 	for i := 0; i < len(data.children); i++ {
@@ -65,6 +68,10 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 								expires:  infiniteTime(),
 								datatype: STREAM_TYPE,
 							}
+						}
+						if xreadcb != nil {
+							xreadcb()
+							xreadcb = nil
 						}
 						if err != nil {
 							respondIfMaster(ctx, conn, encodeErrorString(err.Error()))
@@ -131,9 +138,14 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						}
 						if strings.EqualFold(data.children[i+1].content, "block") {
 							durMS := strtoint(data.children[i+2].content)
-							time.AfterFunc(time.Duration(durMS)*time.Millisecond, func() {
+							cb := func() {
 								xreadresponder(data.children[i+4:])
-							})
+							}
+							if durMS == 0 {
+								xreadcb = cb
+							} else {
+								time.AfterFunc(time.Duration(durMS)*time.Millisecond, cb)
+							}
 						} else {
 							xreadresponder(data.children[i+2:])
 						}
