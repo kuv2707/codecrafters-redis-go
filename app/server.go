@@ -14,7 +14,7 @@ type Context struct {
 	info      map[string]string
 	cmdArgs   map[string]string
 	storage   map[string]Value
-	offsetACK int
+	offsetACK int64
 	slaves    map[*net.Conn]bool
 }
 

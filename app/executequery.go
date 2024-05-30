@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var ackInfo = make(map[string]int)
+var ackInfo = make(map[string]int64)
 
 func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 	// this data is a resp array, as per the protocol
@@ -49,13 +49,29 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						entry_id := data.children[i+2].content
 						key := data.children[i+3].content
 						value := data.children[i+4].content
-						ctx.storage[stream_key] = Value{
-							value:    encodeQuery(entry_id, key, value),
-							expires:  infiniteTime(),
-							datatype: STREAM_TYPE,
+						storedVal, exists := ctx.storage[stream_key]
+						var err error
+						if exists && storedVal.datatype == STREAM_TYPE {
+							log("adding to existing stream")
+							s := storedVal.value.(*Stream)
+							err = s.appendEntry(entry_id, key, value)
+
+						} else {
+							log("adding to new stream")
+							newstream := createStream(stream_key)
+							err = newstream.appendEntry(entry_id, key, value)
+							ctx.storage[stream_key] = Value{
+								value:    newstream,
+								expires:  infiniteTime(),
+								datatype: STREAM_TYPE,
+							}
 						}
-						respondIfMaster(ctx, conn, encodeSimpleString(entry_id))
-						propagateCommand(cmdctx, ctx)
+						if err != nil {
+							respondIfMaster(ctx, conn, encodeErrorString(err.Error()))
+						} else {
+							respondIfMaster(ctx, conn, encodeSimpleString(entry_id))
+							propagateCommand(cmdctx, ctx)
+						}
 					}
 				case "GET":
 					{
@@ -66,7 +82,7 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						if !exists || value.expired() {
 							response = NULL_BULK_STRING
 						} else {
-							response = encodeBulkString(value.value)
+							response = encodeBulkString(value.value.(string))
 						}
 						respond(conn, response)
 					}
@@ -161,12 +177,12 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 
 type AckUpdate struct {
 	laddr  string
-	ackVal int
+	ackVal int64
 }
 
 var ackUpdateChan = make(chan AckUpdate)
 
-func handleWait(replNo int, timeout int, conn net.Conn, ctx *Context) {
+func handleWait(replNo int64, timeout int64, conn net.Conn, ctx *Context) {
 	log("SERVER ACK is", ctx.offsetACK)
 	if ctx.offsetACK == 0 {
 		// obv slaves will also give 0, so dont even ask them
@@ -196,8 +212,8 @@ func handleWait(replNo int, timeout int, conn net.Conn, ctx *Context) {
 				if upd.ackVal+37 == ctx.offsetACK {
 					valids[upd.laddr] = 1
 				}
-				if len(valids) == replNo {
-					respond(conn, encodeInteger(replNo))
+				if len(valids) == int(replNo) {
+					respond(conn, encodeInteger(int(replNo)))
 					return
 				}
 			}
@@ -228,8 +244,8 @@ func getDuration(data []Data) time.Duration {
 }
 
 func updateACKOffset(s string, ctx *Context) {
-	log(ctx.info["role"], "Updating ACKOFF by ", len(s), " due to command ", s)
-	ctx.offsetACK += len(s)
+	// log(ctx.info["role"], "Updating ACKOFF by ", len(s), " due to command ", s)
+	ctx.offsetACK += int64(len(s))
 }
 
 func propagateCommand(cmdctx *CommandContext, ctx *Context) {

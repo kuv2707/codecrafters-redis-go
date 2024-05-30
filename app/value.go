@@ -6,7 +6,7 @@ import (
 )
 
 type Value struct {
-	value   string
+	value   interface{}
 	datatype string
 	expires time.Time
 }

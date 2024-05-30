@@ -16,6 +16,9 @@ func encodeBulkString(s string) string {
 func encodeSimpleString(s string) string {
 	return fmt.Sprintf("+%s\r\n", s)
 }
+func encodeErrorString(s string) string {
+	return fmt.Sprintf("-%s\r\n", s)
+}
 
 func encodeInteger(a int) string {
 	return fmt.Sprintf(":%d\r\n", a)
