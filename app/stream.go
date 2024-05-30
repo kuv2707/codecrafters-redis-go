@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -14,7 +15,18 @@ type Stream struct {
 
 type StreamEntry struct {
 	id   string
-	data string
+	data []string
+}
+
+func getStream(key string, ctx *Context) *Stream {
+	data, exists := ctx.storage[key]
+	if !exists {
+		return nil
+	}
+	if data.datatype == STREAM_TYPE {
+		return data.value.(*Stream)
+	}
+	return nil
 }
 
 func createStream(id string) *Stream {
@@ -24,13 +36,12 @@ func createStream(id string) *Stream {
 	}
 }
 
-func (s *Stream) appendEntry(id string, key string, value string) (string, error) {
+func (s *Stream) appendEntry(id string, kvs ...string) (string, error) {
 	newid, err := validateId(id, s.entries)
 	if err != nil {
 		return "", err
 	}
-	s.entries = append(s.entries, StreamEntry{id: newid, data: key + string(0xff) + value})
-	log(s.entries)
+	s.entries = append(s.entries, StreamEntry{id: newid, data: kvs})
 	return newid, nil
 }
 
@@ -42,12 +53,10 @@ func validateId(id string, entries []StreamEntry) (string, error) {
 		return autoGenerateId(entries), nil
 	}
 	parts := strings.Split(id, "-")
-	log("processing ", parts, entries)
 	if len(entries) == 0 {
 		//this is the first id
 		if parts[0] == "0" {
 			if parts[1] == "*" {
-				log("hereee")
 				return parts[0] + "-1", nil
 			} else {
 				return id, nil
@@ -112,23 +121,48 @@ func isEqual(first string, second string) bool {
 	return ms1 == ms2
 }
 
-func filterAsterisks(id string, store []StreamEntry) string {
-	parts := strings.Split(id, "-")
-	timestamp := strtoint(parts[0])
-	replace := ""
-	if len(store) > 0 {
-		last := store[len(store)-1]
-		lastparts := strings.Split(last.id, "-")
-		lastts := strtoint(lastparts[0])
-		if lastts == timestamp {
-			replace = "0"
+func insertHyphen(id string, val int64) string {
+	i := strings.Index(id, "-")
+	if i == -1 {
+		return id + "-" + fmt.Sprint(val)
+	}
+	return id
+}
+
+func getComps(id string) [2]int64 {
+	a := strings.Split(id, "-")
+	return [2]int64{strtoint(a[0]), strtoint(a[1])}
+}
+
+func xrange(s *Stream, start_entry_id string, end_entry_id string, ctx *Context) []StreamEntry {
+	log("data",s.entries)
+	start_entry_id = insertHyphen(start_entry_id, 0)
+	end_entry_id = insertHyphen(end_entry_id, math.MaxInt64)
+	collected := make([]StreamEntry, 0)
+	for i := range s.entries {
+		if isIdInRangeInc(s.entries[i].id, start_entry_id, end_entry_id) {
+			collected = append(collected, s.entries[i])
 		}
 	}
-	if len(store) == 0 {
-		replace = "1"
+	return collected
+}
+
+func isIdInRangeInc(id string, low string, high string) bool {
+	return isIdGT(id, low, true) && isIdGT(high, id, true)
+}
+
+func isIdGT(a string, b string, equality bool) bool {
+	first := getComps(a)
+	second := getComps(b)
+	if first[0] > second[0] {
+		return true
+	} else if first[0] < second[0] {
+		return false
 	} else {
-		replace = "0"
+		if equality {
+			return first[1] >= second[1]
+		} else {
+			return first[1] > second[1]
+		}
 	}
-	parts[1] = strings.Replace(parts[1], "*", replace, 1)
-	return strings.Join(parts, "-")
 }

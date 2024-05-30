@@ -32,3 +32,10 @@ func encodeQuery(words ...string) string {
 	}
 	return ret
 }
+func encodeRawQuery(sub ...string) string {
+	ret := fmt.Sprintf("*%d\r\n", len(sub))
+	for _, word := range sub {
+		ret += word
+	}
+	return ret
+}

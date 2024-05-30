@@ -49,18 +49,17 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						entry_id := data.children[i+2].content
 						key := data.children[i+3].content
 						value := data.children[i+4].content
-						storedVal, exists := ctx.storage[stream_key]
+						s := getStream(stream_key, ctx)
 						var err error
 						stored_id := ""
-						if exists && storedVal.datatype == STREAM_TYPE {
+						if s != nil {
 							log("adding to existing stream")
-							s := storedVal.value.(*Stream)
 							stored_id, err = s.appendEntry(entry_id, key, value)
 
 						} else {
 							log("adding to new stream")
 							newstream := createStream(stream_key)
-							stored_id, err = newstream.appendEntry(entry_id, key, value)
+							stored_id, err = newstream.appendEntry(entry_id, mapDataArrayToContent(data.children[i+3:])...)
 							ctx.storage[stream_key] = Value{
 								value:    newstream,
 								expires:  infiniteTime(),
@@ -86,6 +85,22 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 							response = encodeBulkString(value.value.(string))
 						}
 						respond(conn, response)
+					}
+				case "XRANGE":
+					{
+						stream_key := data.children[i+1].content
+						start_entry_id := data.children[i+2].content
+						end_entry_id := data.children[i+3].content
+						collected := xrange(getStream(stream_key, ctx), start_entry_id, end_entry_id, ctx)
+						respcoll := make([]string, 0)
+						for i := range collected {
+							q:=encodeQuery(collected[i].data...)
+							s:=encodeBulkString(collected[i].id)
+							respcoll = append(respcoll, encodeRawQuery(s,q))
+						}
+						respstr := encodeRawQuery(respcoll...)
+						log("RES->",respstr,"END")
+						respond(conn, respstr)
 					}
 				case "TYPE":
 					{
