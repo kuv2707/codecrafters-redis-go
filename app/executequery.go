@@ -11,7 +11,7 @@ import (
 
 var ackInfo = make(map[string]int64)
 
-// a dirty and leaky way 
+// a dirty and leaky way
 var xreadcb func()
 
 func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
@@ -112,9 +112,9 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 				case "XREAD":
 					{
 
-						xreadresponder := func(dataArray []Data) {
-
-							streams := xread(mapDataArrayToContent(dataArray), ctx)
+						xreadresponder := func(dataArray []string) {
+							log("CB CALLED")
+							streams := xread(dataArray, ctx)
 							if len(streams) == 0 {
 								respond(conn, NULL_BULK_STRING)
 							} else {
@@ -138,16 +138,19 @@ func Execute(data *Data, conn net.Conn, ctx *Context, cmdctx *CommandContext) {
 						}
 						if strings.EqualFold(data.children[i+1].content, "block") {
 							durMS := strtoint(data.children[i+2].content)
+							dataArg := processDollar(mapDataArrayToContent(data.children[i+4:]), ctx)
+
 							cb := func() {
-								xreadresponder(data.children[i+4:])
+								xreadresponder(dataArg)
 							}
+							log("BLOCK duration", durMS)
 							if durMS == 0 {
 								xreadcb = cb
 							} else {
 								time.AfterFunc(time.Duration(durMS)*time.Millisecond, cb)
 							}
 						} else {
-							xreadresponder(data.children[i+2:])
+							xreadresponder(mapDataArrayToContent(data.children[i+2:]))
 						}
 					}
 				case "TYPE":

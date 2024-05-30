@@ -194,3 +194,19 @@ func isIdGT(a string, b string, equality bool) bool {
 		}
 	}
 }
+
+func processDollar(words []string, ctx *Context) []string {
+	l := len(words)
+	for i := l / 2; i < l; i++ {
+		if words[i] == "$" {
+			stream := getStream(words[i-l/2], ctx)
+			if len(stream.entries) > 0 {
+				words[i] = stream.entries[len(stream.entries)-1].id
+			} else {
+				log("NO ENTRIES YET")
+			}
+		}
+	}
+	log("AFTER $ PROCESS",words)
+	return words
+}
