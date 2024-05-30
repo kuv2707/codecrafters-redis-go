@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Stream struct {
@@ -36,6 +37,9 @@ func (s *Stream) appendEntry(id string, key string, value string) (string, error
 func validateId(id string, entries []StreamEntry) (string, error) {
 	if id == "0-0" {
 		return "", errors.New("ERR The ID specified in XADD must be greater than 0-0")
+	}
+	if id == "*" {
+		return autoGenerateId(entries), nil
 	}
 	parts := strings.Split(id, "-")
 	log("processing ", parts, entries)
@@ -80,6 +84,21 @@ func validateId(id string, entries []StreamEntry) (string, error) {
 		}
 	}
 
+}
+
+func autoGenerateId(entries []StreamEntry) string {
+	now := time.Now().UnixMilli()
+	if len(entries) == 0 {
+		return fmt.Sprintf("%d-0", now)
+	} else {
+		last := strings.Split(entries[len(entries)-1].id, "-")
+		lastts := strtoint(last[0])
+		if lastts == now {
+			return fmt.Sprintf("%d-%d", now, strtoint(last[1])+1)
+		} else {
+			return fmt.Sprintf("%d-0", now)
+		}
+	}
 }
 
 func isGreater(first string, second string) bool {
